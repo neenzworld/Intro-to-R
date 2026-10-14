@@ -1,0 +1,225 @@
+---
+title: "Introductory R Workshop"
+subtitle: "Data Wrangling and Visualization with the Tidyverse"
+author: "Neena Abimbola Albarus"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: false
+    theme: cosmo
+    fig-width: 9
+    fig-height: 6
+execute:
+  warning: false
+  message: false
+---
+
+```{r setup-packages, include=FALSE}
+# ==============================================================================
+# SETUP AND ENVIRONMENT
+# ==============================================================================
+if (!requireNamespace("tidyverse", quietly = TRUE)) {
+  install.packages("tidyverse", repos = "https://cloud.r-project.org")
+}
+
+library(tidyverse)
+```
+
+## 1. Getting Oriented with the Sample Dataset
+
+Before we can wrangle or visualize anything, we need to know what we are working with. The `mpg` dataset ships with the tidyverse and contains fuel economy data for 234 car models observed between 1999 and 2008. Every tidyverse exercise starts with a quick look at the data structure, because that tells you which columns exist, what types they are, and how many observations you have to work with.
+
+```{r inspect-data}
+glimpse(mpg)
+head(mpg)
+```
+
+**What is happening here:** The `glimpse()` function prints the data frame sideways so you can see every column name, its type, and the first few values. It is much more informative than `head()` for wide datasets. The `head()` call shows the first six rows in full, which is useful when you want to see actual values rather than a summary. Together they give you a quick sense of the shape and content of the data before you start manipulating it.
+
+> **⚠️ Common Pitfalls**
+>
+> - **Skipping the inspection step.** Jumping straight into plotting or filtering without looking at your data is the fastest way to waste an hour debugging an error that a single `glimpse()` call would have prevented.
+> - **Assuming column names are what you remember.** The `mpg` dataset has columns like `cty` and `hwy` rather than `city_mpg` and `highway_mpg`. Always verify names before referencing them.
+> - **Confusing `head()` with `slice_head()`.** `head()` is a base R function that works on any object. `slice_head()` is the tidyverse equivalent that plays nicely inside a pipe. Both work, but the latter is more consistent with the rest of the workflow.
+
+## 2. Data Visualization with ggplot2
+
+The `ggplot2` package implements the grammar of graphics, which builds plots layer by layer. Every plot starts with a call to `ggplot()`, adds a mapping from columns to visual aesthetics, and then layers on geometric objects, scales, themes, and labels. This structure makes it easy to start simple and add complexity without rewriting the plot from scratch.
+
+### Basic Scatterplot
+
+```{r basic-scatterplot}
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) +
+  geom_point()
+```
+
+**What is happening here:** The `ggplot()` call sets up the plot with the data and the aesthetic mapping, which connects the `displ` column to the horizontal axis and the `hwy` column to the vertical axis. The `geom_point()` layer then draws a point for every observation. This is the minimal viable ggplot, and it is worth building up from here whenever you are exploring a new dataset.
+
+> **⚠️ Common Pitfalls**
+>
+> - **Forgetting the plus sign.** Every layer is added with `+`, not `%>%`. Mixing the two is a common source of frustration for beginners.
+> - **Putting `mapping` outside of `aes()`.** Writing `mapping = x = displ` will throw an error. Every column reference must go inside `aes()`.
+> - **Overplotting without transparency.** With many observations, points can hide each other. Add `alpha = 0.5` inside `geom_point()` to see density more clearly.
+
+### Enhanced Scatterplot with Styling
+
+```{r styled-scatterplot}
+ggplot(data = mpg, mapping = aes(x = displ, y = hwy, color = class)) +
+  geom_point(size = 3, alpha = 0.8) +
+  geom_smooth(method = "lm", se = FALSE, color = "black") +
+  theme_minimal() +
+  labs(
+    title = "Engine Size versus Highway Fuel Economy",
+    subtitle = "Larger engines consistently yield lower gas mileage",
+    x = "Engine Size (Liters)",
+    y = "Highway Fuel Economy (MPG)",
+    color = "Vehicle Class"
+  )
+```
+
+**How to read this figure:** Each point represents one car model. The horizontal axis shows engine displacement in liters, and the vertical axis shows highway fuel economy in miles per gallon. The color of each point encodes the vehicle class, which reveals that compact and midsize cars cluster in the high efficiency, low displacement region while SUVs, pickups, and minivans cluster in the low efficiency, high displacement region. The black regression line summarizes the overall negative relationship between engine size and fuel economy across all vehicle classes.
+
+**🔑 Key Takeaway:** A scatterplot with color encoding and a fitted trend line is often enough to reveal the core structure of a relationship. Adding the class dimension through color shows that the overall negative slope is driven both by within class patterns and by the simple fact that different vehicle classes occupy different regions of the engine size spectrum.
+
+## 3. Data Wrangling with dplyr
+
+The `dplyr` package provides a small set of verbs that cover the vast majority of data manipulation tasks. Each verb does one thing well, and they compose naturally through the pipe operator. This section walks through the four most common verbs: `select()`, `filter()`, `mutate()`, and `arrange()`.
+
+### Selecting Columns
+
+```{r select-columns}
+mpg_small <- mpg %>%
+  dplyr::select(manufacturer, model, year, hwy)
+
+head(mpg_small)
+```
+
+**What is happening here:** The `select()` function keeps only the named columns and drops everything else. This is useful when you are working with a wide dataset and only need a handful of variables for a specific analysis. We use `dplyr::select()` with the namespace prefix because `select` is also the name of a base R function, and being explicit prevents conflicts when other packages are loaded.
+
+> **⚠️ Common Pitfalls**
+>
+> - **Forgetting the namespace when other packages are loaded.** The `MASS` package also exports a `select()` function that shadows the dplyr version. Always use `dplyr::select()` in scripts that load multiple packages.
+> - **Trying to select columns with a string.** Writing `select("manufacturer")` fails because `select()` uses bare column names, not strings. Wrap in `any_of()` or `all_of()` if you need programmatic selection.
+> - **Losing columns you need later.** `select()` drops everything not listed. If you only want to reorder rather than drop, use `relocate()` instead.
+
+### Filtering Rows
+
+```{r filter-rows}
+audi_2008 <- mpg %>%
+  filter(manufacturer == "audi", year == 2008)
+
+head(audi_2008)
+```
+
+**What is happening here:** The `filter()` function keeps rows that satisfy the given conditions. Multiple conditions separated by commas are combined with a logical AND, so this keeps only rows where the manufacturer is Audi and the year is 2008. Use `|` for logical OR, and `!` to negate a condition.
+
+> **⚠️ Common Pitfalls**
+>
+> - **Using `=` instead of `==` for comparison.** A single equals sign is assignment, not comparison. `filter()` will silently return unexpected results if you use the wrong operator.
+> - **Forgetting quotes around character strings.** `filter(manufacturer == audi)` will fail because R will look for an object named `audi` instead of the string `"audi"`.
+> - **Missing values propagate through filters.** If a column contains `NA`, any comparison involving it returns `NA`, and `filter()` drops those rows. Add `| is.na(column)` if you want to keep them.
+
+### Creating New Columns
+
+```{r mutate-columns}
+mpg_metric <- mpg %>%
+  mutate(hwy_kml = hwy * 0.425144) %>%
+  dplyr::select(manufacturer, model, hwy, hwy_kml)
+
+head(mpg_metric)
+```
+
+**What is happening here:** The `mutate()` function creates a new column by applying an expression to existing columns. Here we convert highway fuel economy from miles per gallon to kilometers per liter using the conversion factor 0.425144. The new column is added to the data frame, and subsequent verbs can reference it immediately.
+
+> **⚠️ Common Pitfalls**
+>
+> - **Overwriting existing columns accidentally.** If you write `mutate(hwy = hwy * 0.4)`, you replace the original `hwy` column. Use a new name to preserve the original.
+> - **Forgetting that `mutate()` evaluates sequentially.** Columns created earlier in the same `mutate()` call can be referenced by later expressions, but columns created later cannot be referenced by earlier ones.
+> - **Mixing up `mutate()` with `transmute()`.** `transmute()` keeps only the newly created columns. `mutate()` keeps everything and adds the new column.
+
+### Chaining Operations
+
+```{r chain-operations}
+suv_efficiency <- mpg %>%
+  filter(class == "suv", year == 2008) %>%
+  dplyr::select(manufacturer, model, cty, hwy) %>%
+  arrange(desc(hwy))
+
+print(suv_efficiency)
+```
+
+**What is happening here:** This pipeline filters to SUVs from 2008, keeps only four columns, and sorts the result by highway fuel economy in descending order. The pipe operator `%>%` passes the output of each step into the next, so the code reads top to bottom like a set of instructions. This is the core idiom of tidyverse data manipulation, and once you are comfortable with it, complex transformations become easy to read and debug.
+
+> **⚠️ Common Pitfalls**
+>
+> - **Pipes inside the wrong verb.** You cannot pipe within `filter()` or `mutate()` expressions. Each verb takes its own arguments, and the pipe only connects verbs to each other.
+> - **Long pipelines without intermediate checks.** If a five step pipeline fails, it can be hard to see which step is broken. Insert `glimpse()` calls or run the steps separately when debugging.
+> - **`arrange()` on a character column.** By default, `arrange()` sorts strings alphabetically. Use `arrange(desc(column))` if you want reverse order, and remember that capitalization affects alphabetical sorting.
+
+## 4. Grouped Aggregations
+
+The `group_by()` and `summarise()` pair is the workhorse of descriptive analysis. It splits the data into groups, applies a summary function to each group, and returns a tidy data frame with one row per group. Combined with `arrange()`, it produces exactly the kind of summary tables you would want in a report.
+
+```{r grouped-summary}
+class_summary <- mpg %>%
+  group_by(class) %>%
+  summarise(
+    avg_hwy    = mean(hwy, na.rm = TRUE),
+    total_cars = n()
+  ) %>%
+  arrange(desc(avg_hwy))
+
+print(class_summary)
+
+ggplot(class_summary, aes(x = reorder(class, avg_hwy), y = avg_hwy)) +
+  geom_col(fill = "midnightblue", width = 0.7) +
+  coord_flip() +
+  theme_minimal(base_size = 12) +
+  labs(
+    title = "Average Highway Efficiency by Vehicle Class",
+    x = "Vehicle Class",
+    y = "Mean Highway MPG"
+  )
+```
+
+**How to read this figure:** Each bar represents one vehicle class, and the height of the bar is the mean highway fuel economy across all cars in that class. The classes are sorted from lowest to highest efficiency, so the reader can immediately see which categories are the most and least fuel efficient. Compact cars sit at one end and pickups at the other, with SUVs and minivans somewhere in between.
+
+**🔑 Key Takeaway:** Grouped summaries turn a raw data frame into a compact, interpretable table that you can sort, plot, or export. The `n()` function counts observations per group, which is important because summary means can be misleading when a group has very few members. Always report both the mean and the group size when you summarize.
+
+> **⚠️ Common Pitfalls**
+>
+> - **Forgetting `na.rm = TRUE`.** Without it, `mean()` returns `NA` when any value in the group is missing, which silently collapses the summary.
+> - **Not ungrouping after summarising.** If you continue with more transformations, ungroup with `ungroup()` to avoid surprising behavior in later steps.
+> - **Sorting after summarising.** `arrange()` works on the output of `summarise()`, not on the original data frame. Put it at the end of the pipeline for the result you want.
+
+## 5. Quick Reference Cheatsheet
+
+The table below summarizes the core tidyverse verbs you will use again and again. Pin it next to your monitor until the syntax becomes muscle memory.
+
+| Operation | Function | Description |
+|---|---|---|
+| **Pipe operator** | `%>%` or `|>` | Chains operations, read as "and then" |
+| **Pick columns** | `dplyr::select()` | Keeps or reorders specific variables |
+| **Pick rows** | `filter()` | Subsets data based on logical conditions |
+| **New columns** | `mutate()` | Creates or updates columns |
+| **Sorting** | `arrange()` | Orders rows, `desc()` for high to low |
+| **Aggregations** | `group_by()` | Groups data for aggregate calculations |
+| **Summaries** | `summarise()` | Reduces each group to a summary row |
+| **Plotting** | `ggplot()` | Layered graphics framework |
+
+> **⚠️ Common Pitfalls**
+>
+> - **Memorizing the syntax before understanding the logic.** Each verb does one thing. If you understand what each verb does, you can look up the exact syntax in seconds. Do not try to memorize everything.
+> - **Reaching for base R when tidyverse is cleaner.** Base R's `subset()`, `[`, and `aggregate()` all work, but the tidyverse verbs compose more naturally and read more clearly.
+> - **Forgetting that verbs are pipe friendly.** Every dplyr verb takes a data frame as its first argument, which is exactly why piping works. This consistency is the whole point.
+
+## 6. Putting It All Together
+
+You now have the four foundational tidyverse verbs in your toolkit, plus the grammar of graphics for building layered visualizations. Those are the two most important skills for any applied analysis in R.
+
+The core workflow is straightforward. Start by inspecting your data with `glimpse()` and `head()`. Build a quick exploratory plot with `ggplot()` and `geom_point()` to see what the data looks like. Use `select()`, `filter()`, and `mutate()` to shape the data into what you need. Then `group_by()` and `summarise()` to produce summary statistics, and plot those summaries with `geom_col()` or `geom_line()`.
+
+Everything you have learned here extends naturally to real datasets. The `mpg` dataset is small and clean, but the same verbs work on any tabular data, no matter how many rows or columns it has. The pipe operator keeps your code readable even when the transformation pipeline becomes long, and the grammar of graphics lets you build complex visualizations from simple components.
+
+Once you are comfortable with this workshop, the natural next steps are joining multiple data frames with `left_join()` and `inner_join()`, reshaping data between wide and long formats with `pivot_wider()` and `pivot_longer()`, and handling missing data with `drop_na()` and `replace_na()`. Those verbs, combined with what you already know, cover the vast majority of everyday data work in R.
